@@ -1,3 +1,4 @@
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -10,14 +11,16 @@
 #include "stdbool.h"
 
 #define REQUIRED_ARGC 7
-#define PORT_POS 1
 #define MSG_POS 2
 #define ERROR 1
+#define SUCCESS 0
 #define QLEN 1
 #define PROTOCOL "tcp"
-#define BUFLEN 1024
+#define BUFFER_SIZE 1024
 #define MANDATORY_ERR "Mandatory args missing!\n"
 #define PORT_CHOSEN_ERR "Use a port number between 1025 and 65535\n"
+#define CARRIAGE "\r\n"
+#define IO_ERR "Unable to create a file descriptor to read socket\n"
 
 int usage(char *progname) {
     fprintf(stderr, "usage: %s -p PORT -r DOCUMENT_DIRECTORY -t AUTH_TOKEN\n", progname);
@@ -30,19 +33,82 @@ int errexit(char *format, char *arg) {
     exit(ERROR);
 }
 
+int create_socket_and_listen(char *port_number) {
+    struct sockaddr_in sin;
+    struct protoent *protoinfo;
+    int sd;
+
+    /* Determine protocol */
+    if ((protoinfo = getprotobyname(PROTOCOL)) == NULL)
+        errexit("cannot find protocol information for %s", PROTOCOL);
+
+    /* Setup endpoint info */
+    memset((char *)&sin, 0x0, sizeof(sin));
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = INADDR_ANY;
+    sin.sin_port = htons((u_short)atoi(port_number));
+
+    /* Socket creation */
+    sd = socket(PF_INET, SOCK_STREAM, protoinfo->p_proto);
+    if (sd < 0)
+        errexit("cannot create socket", NULL);
+
+    /* Bind the socket */
+    if (bind(sd, (struct sockaddr *)&sin, sizeof(sin)) < 0)
+        errexit("cannot bind to port %s", port_number);
+
+    /* Listen for incoming connections */
+    if (listen(sd, QLEN) < 0)
+        errexit("cannot listen on port %s\n", port_number);
+
+    printf("Server Address: %s\nSocket Created and is listening on port %d\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
+
+    return sd;
+}
+
+/* Accept a connection. Buffer data sent by client */
+int accept_a_connection_and_read_request(int listen_fd) {
+    struct sockaddr_in client;
+    unsigned int cli_len = sizeof(client);
+    char buffer[BUFFER_SIZE];
+    memset(buffer, 0x0, sizeof(buffer));
+    int sd2 = accept(listen_fd, (struct sockaddr *)&client, &cli_len);
+    if (sd2 < 0)
+        errexit("error accepting connection", NULL);
+    printf("New Client connected from port number %d and IP address  %s\n", ntohs(client.sin_port), inet_ntoa(client.sin_addr));
+
+    FILE *fp = fdopen(sd2, "r");
+    if (fp == NULL) {
+        printf(IO_ERR);
+        exit(ERROR);
+    }
+    printf("Reading Request\n");
+    while (fgets(buffer, BUFFER_SIZE, fp) != NULL) {
+        printf("RSP: %s", buffer);
+    }
+    return sd2;
+}
+
+void write_to_connection(int conn_fd, char *reply) {
+    /* write message to the connection */
+    if (write(conn_fd, reply, strlen(reply)) < 0)
+        errexit("error writing message: %s", reply);
+}
+
+bool isRequestWellFormed(const char *request) {
+    // char *sample = "GET /5.txt HTTP/1.1\r\n\r\n";
+    return true;
+}
+
 int main(int argc, char *argv[]) {
-    // struct sockaddr_in sin;
-    // struct sockaddr addr;
-    // struct protoent *protoinfo;
-    // unsigned int addrlen;
-    // int sd, sd2;
-    int opt;  // option
+    int opt, sd, sd2;
     bool PORT_GIVEN = false;
     bool ROOT_DIR_GIVEN = false;
     bool AUTH_TOKEN_GIVEN = false;
     char *PORT_NUMBER = NULL;
     char *ROOT_DIR = NULL;
     char *AUTH_TOKEN = NULL;
+    // char *REPLY = NULL;
 
     /* There should be be 7 elements in argv, without which we terminate the program execution. */
     if (argc != REQUIRED_ARGC) {
@@ -95,42 +161,13 @@ int main(int argc, char *argv[]) {
     printf("ROOT_DIR : %s\n", ROOT_DIR);
     printf("AUTH_TOKEN : %s\n", AUTH_TOKEN);
 
-    // /* determine protocol */
-    // if ((protoinfo = getprotobyname(PROTOCOL)) == NULL)
-    //     errexit("cannot find protocol information for %s", PROTOCOL);
+    sd = create_socket_and_listen(PORT_NUMBER);
+    sd2 = accept_a_connection_and_read_request(sd);
+    // write_to_connection(sd2, REPLY);
 
-    // /* setup endpoint info */
-    // memset((char *)&sin, 0x0, sizeof(sin));
-    // sin.sin_family = AF_INET;
-    // sin.sin_addr.s_addr = INADDR_ANY;
-    // sin.sin_port = htons((u_short)atoi(argv[PORT_POS]));
-
-    // /* allocate a socket */
-    // /*   would be SOCK_DGRAM for UDP */
-    // sd = socket(PF_INET, SOCK_STREAM, protoinfo->p_proto);
-    // if (sd < 0)
-    //     errexit("cannot create socket", NULL);
-
-    // /* bind the socket */
-    // if (bind(sd, (struct sockaddr *)&sin, sizeof(sin)) < 0)
-    //     errexit("cannot bind to port %s", argv[PORT_POS]);
-
-    // /* listen for incoming connections */
-    // if (listen(sd, QLEN) < 0)
-    //     errexit("cannot listen on port %s\n", argv[PORT_POS]);
-
-    // /* accept a connection */
-    // addrlen = sizeof(addr);
-    // sd2 = accept(sd, &addr, &addrlen);
-    // if (sd2 < 0)
-    //     errexit("error accepting connection", NULL);
-
-    // /* write message to the connection */
-    // if (write(sd2, argv[MSG_POS], strlen(argv[MSG_POS])) < 0)
-    //     errexit("error writing message: %s", argv[MSG_POS]);
-
-    // /* close connections and exit */
-    // close(sd);
-    // close(sd2);
-    // exit(0);
+    /* close connections and exit */
+    printf("Closing connections\n");
+    close(sd);
+    close(sd2);
+    exit(SUCCESS);
 }
