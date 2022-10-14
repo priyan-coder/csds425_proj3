@@ -1,7 +1,7 @@
 
 CFLAGS=-g -Wall -Werror
 
-TARGETS=sockets socketsd
+TARGETS=proj3
 
 all: $(TARGETS)
 
