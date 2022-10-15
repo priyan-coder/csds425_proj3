@@ -122,14 +122,27 @@ bool isRequestContainingTheCorrectMethod(char *request) {
 /* Checks if each line of the client's request header terminates with a carriage */
 bool isEachLineWellTerminated(char *request) {
     // status 400 check
-    printf("Client_Request: %s", request);
-    return true;
+    printf("Client_Request in isEachLineWellTerminated: %s", request);
+    char *p = strrchr(request, '\r');
+    printf("In isEachLineWellTerminated: %s", p);
+    if ((p != NULL) && (strcmp(p + 1, "\n") == 0) && (strcmp(p + 2, "") == 0)) {
+        return true;
+    } else {
+        printf("Not well-terminated in isEachLineWellTerminated\n");
+        return false;
+    }
 }
 
 /* Checks if last two characters of the request header correspond to carriage */
 bool isRequestEndingWithCarriage(char *request) {
     // status 400 check
-    return true;
+    printf("%lu", strlen(request));
+    printf("request in isRequestEndingWithCarriage: %s", request);
+    if (strstr(request, CARRIAGE) != NULL) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 // return False for err scenarios
@@ -214,7 +227,6 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
     }
     printf("Reading Request\n");
     while (fgets(buffer, BUFFER_SIZE, fp) != NULL) {
-        // printf("RSP: %s", buffer);
         if (!isFirstLineChecksDone) {
             if (!isRequestStartingWithCorrectSyntax(buffer)) {
                 strcpy(status, STATUS_400);
@@ -232,15 +244,15 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
             *req_type = figureOutTypeOfRequest(buffer);
         }
 
-        // if (!isEachLineWellTerminated(buffer)) {
-        //     strcpy(status, STATUS_400);
-        //     break;
-        // }
+        if (!isEachLineWellTerminated(buffer)) {
+            strcpy(status, STATUS_400);
+            break;
+        }
     }
-
-    // if (!isRequestEndingWithCarriage(buffer)) {
-    //     strcpy(status, STATUS_400);
-    // }
+    printf("Printing buffer outside reading loop: %s", buffer);
+    if (!isRequestEndingWithCarriage(buffer)) {
+        strcpy(status, STATUS_400);
+    }
     return sd2;
 }
 
@@ -317,7 +329,7 @@ int main(int argc, char *argv[]) {
     while (1) {
         memset(status, 0x0, MAX_STATUS_LENGTH);
         int sd2 = accept_a_connection_and_read_request(sd, status, &type_of_request_by_client);
-        if (strlen(status))
+        if (strlen(status) > 0)
             printf("status: %s\n", status);
         if (type_of_request_by_client == 1) {
             printf("GET request detected\n");
