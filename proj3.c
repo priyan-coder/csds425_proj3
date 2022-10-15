@@ -69,7 +69,7 @@ bool isRequestStartingWithCorrectSyntax(char *request) {
     char *token;
     token = strtok(copy_req, " ");
     while (token != NULL) {
-        printf("tokenising in isRequestStartingWithCorrectSyntax: %s\n", token);
+        // printf("tokenising in isRequestStartingWithCorrectSyntax: %s\n", token);
         count += 1;
         token = strtok(NULL, " ");
     }
@@ -95,9 +95,9 @@ bool isRequestContainingTheCorrectProtocol(char *request) {
         token = strtok(NULL, " ");
         i++;
     }
-    printf("token in isRequestContainingTheCorrectProtocol : %s\n", token);
+    // printf("token in isRequestContainingTheCorrectProtocol : %s\n", token);
     char *app_protocol = strtok(token, "/");
-    printf("app_protocol in isRequestContainingTheCorrectProtocol : %s\n", app_protocol);
+    // printf("app_protocol in isRequestContainingTheCorrectProtocol : %s\n", app_protocol);
     if (strcmp(app_protocol, "HTTP") == 0) {
         return true;
     } else {
@@ -122,22 +122,6 @@ bool isRequestContainingTheCorrectMethod(char *request) {
 /* Checks if each line of the client's request header terminates with a carriage */
 bool isEachLineWellTerminated(char *request) {
     // status 400 check
-    printf("Client_Request in isEachLineWellTerminated: %s", request);
-    char *p = strrchr(request, '\r');
-    printf("In isEachLineWellTerminated: %s", p);
-    if ((p != NULL) && (strcmp(p + 1, "\n") == 0) && (strcmp(p + 2, "") == 0)) {
-        return true;
-    } else {
-        printf("Not well-terminated in isEachLineWellTerminated\n");
-        return false;
-    }
-}
-
-/* Checks if last two characters of the request header correspond to carriage */
-bool isRequestEndingWithCarriage(char *request) {
-    // status 400 check
-    printf("%lu", strlen(request));
-    printf("request in isRequestEndingWithCarriage: %s", request);
     if (strstr(request, CARRIAGE) != NULL) {
         return true;
     } else {
@@ -200,7 +184,7 @@ int create_socket_and_listen(char *port_number) {
     if (listen(sd, QLEN) < 0)
         errexit("cannot listen on port %s\n", port_number);
 
-    printf("Server Address: %s\nSocket Created and is listening on port %d\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
+    // printf("Server Address: %s\nSocket Created and is listening on port %d\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
 
     return sd;
 }
@@ -218,15 +202,20 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
     int sd2 = accept(listen_fd, (struct sockaddr *)&client, &cli_len);
     if (sd2 < 0)
         errexit("error accepting connection", NULL);
-    printf("New Client connected from port number %d and IP address  %s\n", ntohs(client.sin_port), inet_ntoa(client.sin_addr));
+    // printf("New Client connected from port number %d and IP address  %s\n", ntohs(client.sin_port), inet_ntoa(client.sin_addr));
 
     FILE *fp = fdopen(sd2, "r");
     if (fp == NULL) {
         printf(IO_ERR);
         exit(ERROR);
     }
-    printf("Reading Request\n");
+    printf("Reading Request...\n");
     while (fgets(buffer, BUFFER_SIZE, fp) != NULL) {
+        printf("REQ: %s", buffer);
+        if (!isEachLineWellTerminated(buffer)) {
+            strcpy(status, STATUS_400);
+            break;
+        }
         if (!isFirstLineChecksDone) {
             if (!isRequestStartingWithCorrectSyntax(buffer)) {
                 strcpy(status, STATUS_400);
@@ -234,23 +223,20 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
             }
             if (!isRequestContainingTheCorrectProtocol(buffer)) {
                 strcpy(status, STATUS_501);
-                break;
+                // break;
             }
             if (!isRequestContainingTheCorrectMethod(buffer)) {
                 strcpy(status, STATUS_405);
-                break;
+                // break;
             }
             isFirstLineChecksDone = true;
             *req_type = figureOutTypeOfRequest(buffer);
         }
-
-        if (!isEachLineWellTerminated(buffer)) {
-            strcpy(status, STATUS_400);
-            break;
-        }
     }
-    printf("Printing buffer outside reading loop: %s", buffer);
-    if (!isRequestEndingWithCarriage(buffer)) {
+    // printf("\nPrinting buffer outside reading loop: %s", buffer);
+    // printf("\n");
+    // Ensures that Client's request ends with CARRIAGE
+    if (strcmp(buffer, CARRIAGE) != 0) {
         strcpy(status, STATUS_400);
     }
     return sd2;
@@ -336,7 +322,7 @@ int main(int argc, char *argv[]) {
         } else if (type_of_request_by_client == 2) {
             printf("TERMINATE request detected\n");
         } else {
-            printf("Not a proper request\n");
+            // printf("Not a proper request\n");
         }
         // printf("%lu\n", strlen(status));
         // Switch cases for different inital status and write responses as required
