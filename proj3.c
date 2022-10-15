@@ -45,7 +45,17 @@ int errexit(char *format, char *arg) {
 int figureOutTypeOfRequest(char *request) {
     //  -1 : Neither GET or Terminate, 1 : GET, 2: Terminate
     // Modify the value of req_type
-    return -1;
+    char copy_req[strlen(request) + 1];
+    memset(copy_req, 0x0, strlen(request) + 1);
+    memcpy(copy_req, request, strlen(request));
+    char *token = strtok(copy_req, " ");
+    if (strcmp(token, "GET") == 0) {
+        return 1;
+    } else if (strcmp(token, "TERMINATE") == 0) {
+        return 2;
+    } else {
+        return -1;
+    }
 }
 
 /* Checks for 3 tokens in the first line of the client's request header */
@@ -192,7 +202,7 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
             //     break;
             // }
             isFirstLineChecksDone = true;
-            // *req_type = figureOutTypeOfRequest(buffer);
+            *req_type = figureOutTypeOfRequest(buffer);
         }
 
         // if (!isEachLineWellTerminated(buffer)) {
@@ -280,7 +290,15 @@ int main(int argc, char *argv[]) {
     while (1) {
         memset(status, 0x0, MAX_STATUS_LENGTH);
         int sd2 = accept_a_connection_and_read_request(sd, status, &type_of_request_by_client);
-        printf("%s", status);
+        if (strlen(status))
+            printf("%s\n", status);
+        if (type_of_request_by_client == 1) {
+            printf("GET request detected\n");
+        } else if (type_of_request_by_client == 2) {
+            printf("TERMINATE request detected\n");
+        } else {
+            printf("Not a proper request\n");
+        }
         // printf("%lu\n", strlen(status));
         // Switch cases for different inital status and write responses as required
         // ifs for type_of_request_by_client and handle the requests sent to modify status
