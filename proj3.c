@@ -42,6 +42,7 @@ int errexit(char *format, char *arg) {
     exit(ERROR);
 }
 
+/* Returns 1 for GET request, 2 for TERMINATE request, -1 for Neither case */
 int figureOutTypeOfRequest(char *request) {
     //  -1 : Neither GET or Terminate, 1 : GET, 2: Terminate
     // Modify the value of req_type
@@ -58,7 +59,7 @@ int figureOutTypeOfRequest(char *request) {
     }
 }
 
-/* Checks for 3 tokens in the first line of the client's request header */
+/* Checks for 3 tokens in the first line of the client's request header. Returns true if 3 tokens were found */
 bool isRequestStartingWithCorrectSyntax(char *request) {
     // status 400 check: tokenize and check for 3 items
     char copy_req[strlen(request) + 1];
@@ -83,13 +84,39 @@ bool isRequestStartingWithCorrectSyntax(char *request) {
 bool isRequestContainingTheCorrectProtocol(char *request) {
     // status 501 check: see if header has "HTTP/" (case-sensitive)
     // tokenize for "/" and check if it is just HTTP and not ALHTTP
-    return true;
+    char copy_req[strlen(request) + 1];
+    memset(copy_req, 0x0, strlen(request) + 1);
+    memcpy(copy_req, request, strlen(request));
+    char *token = strtok(copy_req, " ");
+    int i = 0;  // indicates the num of elems or tokens
+    while (token != NULL) {
+        if (i == 2)
+            break;
+        token = strtok(NULL, " ");
+        i++;
+    }
+    printf("token in isRequestContainingTheCorrectProtocol : %s\n", token);
+    char *app_protocol = strtok(token, "/");
+    printf("app_protocol in isRequestContainingTheCorrectProtocol : %s\n", app_protocol);
+    if (strcmp(app_protocol, "HTTP") == 0) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 bool isRequestContainingTheCorrectMethod(char *request) {
     // status 405 check: METHOD of request can only be "GET" or "TERMINATE"
     // look for GET or TERMINATE in request
-    return true;
+    char copy_req[strlen(request) + 1];
+    memset(copy_req, 0x0, strlen(request) + 1);
+    memcpy(copy_req, request, strlen(request));
+    char *token = strtok(copy_req, " ");
+    if ((strcmp(token, "GET") == 0) || (strcmp(token, "TERMINATE") == 0)) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 /* Checks if each line of the client's request header terminates with a carriage */
@@ -193,14 +220,14 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
                 strcpy(status, STATUS_400);
                 break;
             }
-            // if (!isRequestContainingTheCorrectProtocol(buffer)) {
-            //     strcpy(status, STATUS_501);
-            //     break;
-            // }
-            // if (!isRequestContainingTheCorrectMethod(buffer)) {
-            //     strcpy(status, STATUS_405);
-            //     break;
-            // }
+            if (!isRequestContainingTheCorrectProtocol(buffer)) {
+                strcpy(status, STATUS_501);
+                break;
+            }
+            if (!isRequestContainingTheCorrectMethod(buffer)) {
+                strcpy(status, STATUS_405);
+                break;
+            }
             isFirstLineChecksDone = true;
             *req_type = figureOutTypeOfRequest(buffer);
         }
@@ -291,7 +318,7 @@ int main(int argc, char *argv[]) {
         memset(status, 0x0, MAX_STATUS_LENGTH);
         int sd2 = accept_a_connection_and_read_request(sd, status, &type_of_request_by_client);
         if (strlen(status))
-            printf("%s\n", status);
+            printf("status: %s\n", status);
         if (type_of_request_by_client == 1) {
             printf("GET request detected\n");
         } else if (type_of_request_by_client == 2) {
