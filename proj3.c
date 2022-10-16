@@ -146,11 +146,17 @@ bool isEachLineWellTerminated(char *request) {
     }
 }
 
-// return False for err scenarios
-bool handleTerminateRequest(char *request_token, char *actual_cmd_line_token) {
+/* Compares actual_cmd_line_token against request argument and returns true if server should shut down */
+bool isServerShuttingDown(char *request_token, char *actual_cmd_line_token, char *status) {
     // Check for case-sensitive match
     // Two possible outcomes - either 200 AND terminate server or 403 and continue accepting new connections
-    return true;
+    if (strcmp(actual_cmd_line_token, request_token) == 0) {
+        status = STATUS_200_TERMINATE;
+        return true;
+    } else {
+        status = STATUS_403;
+        return false;
+    }
 }
 
 /* For a GET request, the argument specified in the header has to begin with a "/" */
@@ -345,7 +351,8 @@ int main(int argc, char *argv[]) {
                 // handleGetRequest();
             } else {
                 printf("TERMINATE request detected\n");
-                // handleTerminateRequest(argument, auth_token);
+                TERMINATE_SERVER = isServerShuttingDown(argument, auth_token, status);
+                // writeResponse
             }
 
         } else {
@@ -357,11 +364,12 @@ int main(int argc, char *argv[]) {
         // write_to_connection(sd2);
 
         /* close connections and exit */
-        printf("Closing connections\n");
+        printf("Closing connections...\n");
         close(sd2);
         if (TERMINATE_SERVER)
             break;
     }
+    printf("Terminating Server...\n");
     close(sd);
     exit(SUCCESS);
 }
