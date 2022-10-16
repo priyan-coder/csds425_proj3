@@ -42,6 +42,23 @@ int errexit(char *format, char *arg) {
     exit(ERROR);
 }
 
+/* Parses the first line of client's request header and gets the argument field */
+void grabArgumentFromRequest(char *request, char *argument) {
+    char copy_req[strlen(request) + 1];
+    memset(argument, 0x0, BUFFER_SIZE);
+    memset(copy_req, 0x0, strlen(request) + 1);
+    memcpy(copy_req, request, strlen(request));
+    char *token = strtok(copy_req, " ");
+    int i = 0;  // indicates the num of elems or tokens
+    while (token != NULL) {
+        if (i == 1)
+            break;
+        token = strtok(NULL, " ");
+        i++;
+    }
+    strncpy(argument, token, strlen(token));
+}
+
 /* Returns 1 for GET request, 2 for TERMINATE request, -1 for Neither case */
 int figureOutTypeOfRequest(char *request) {
     //  -1 : Neither GET or Terminate, 1 : GET, 2: Terminate
@@ -190,7 +207,7 @@ int create_socket_and_listen(char *port_number) {
 }
 
 /* Accept a connection. Buffer data sent by client. Check if client's request is well formed and identify the type of request */
-int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_type) {
+int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_type, char *argument) {
     memset(status, 0x0, MAX_STATUS_LENGTH);
     char buffer[BUFFER_SIZE];
     memset(buffer, 0x0, sizeof(buffer));
@@ -231,6 +248,7 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
             }
             isFirstLineChecksDone = true;
             *req_type = figureOutTypeOfRequest(buffer);
+            grabArgumentFromRequest(buffer, argument);
         }
     }
     // printf("\nPrinting buffer outside reading loop: %s", buffer);
@@ -249,16 +267,17 @@ void write_to_connection(int conn_fd, char *reply) {
 }
 
 int main(int argc, char *argv[]) {
-    int opt, sd;
-    int type_of_request_by_client = -1;  //  -1 : Neither GET or Terminate, 1 : GET, 2: Terminate
     bool PORT_GIVEN = false;
     bool ROOT_DIR_GIVEN = false;
     bool AUTH_TOKEN_GIVEN = false;
-    bool terminateServer = false;
-    char *PORT_NUMBER = NULL;
-    char *ROOT_DIR = NULL;
-    char *AUTH_TOKEN = NULL;
+    bool TERMINATE_SERVER = false;
+    int opt, sd;
+    int type_of_request_by_client = -1;  //  -1 : Neither GET or Terminate, 1 : GET, 2: Terminate
+    char *port_number = NULL;
+    char *root_dir = NULL;
+    char *auth_token = NULL;
     char status[MAX_STATUS_LENGTH];  // status based on client request
+    char argument[BUFFER_SIZE];      // the kind of file needed
 
     /* There should be be 7 elements in argv, without which we terminate the program execution. */
     if (argc != REQUIRED_ARGC) {
@@ -271,15 +290,15 @@ int main(int argc, char *argv[]) {
             switch (opt) {
                 case 'p':
                     PORT_GIVEN = true;
-                    PORT_NUMBER = optarg;
+                    port_number = optarg;
                     break;
                 case 'r':
                     ROOT_DIR_GIVEN = true;
-                    ROOT_DIR = optarg;
+                    root_dir = optarg;
                     break;
                 case 't':
                     AUTH_TOKEN_GIVEN = true;
-                    AUTH_TOKEN = optarg;
+                    auth_token = optarg;
                     break;
                 case '?':
                     printf("Unknown option: %c\n", optopt);
@@ -301,30 +320,37 @@ int main(int argc, char *argv[]) {
     }
 
     /* Check for PORT number range */
-    int port_given_by_user = atoi(PORT_NUMBER);
+    int port_given_by_user = atoi(port_number);
     if (port_given_by_user < 1025 || port_given_by_user > 65535) {
         printf(PORT_CHOSEN_ERR);
         usage(argv[0]);
     }
 
-    printf("PORT : %s\n", PORT_NUMBER);
-    printf("ROOT_DIR : %s\n", ROOT_DIR);
-    printf("AUTH_TOKEN : %s\n", AUTH_TOKEN);
+    printf("PORT : %s\n", port_number);
+    printf("ROOT_DIR : %s\n", root_dir);
+    printf("AUTH_TOKEN : %s\n", auth_token);
 
-    sd = create_socket_and_listen(PORT_NUMBER);
+    sd = create_socket_and_listen(port_number);
     while (1) {
         memset(status, 0x0, MAX_STATUS_LENGTH);
-        int sd2 = accept_a_connection_and_read_request(sd, status, &type_of_request_by_client);
+        memset(argument, 0x0, BUFFER_SIZE);
+        int sd2 = accept_a_connection_and_read_request(sd, status, &type_of_request_by_client, argument);  // accept_a_connection_and_read_request
+        printf("Argument in request: %s\n", argument);
         if (strlen(status) > 0)
             printf("status: %s\n", status);
-        if (type_of_request_by_client == 1) {
-            printf("GET request detected\n");
-        } else if (type_of_request_by_client == 2) {
-            printf("TERMINATE request detected\n");
+        if ((strcmp(status, STATUS_400) != 0) && (strcmp(status, STATUS_501) != 0) && (strcmp(status, STATUS_405) != 0)) {
+            // handle get or terminate request
+            if (type_of_request_by_client == 1) {
+                printf("GET request detected\n");
+                // handleGetRequest();
+            } else {
+                printf("TERMINATE request detected\n");
+                // handleTerminateRequest(argument, auth_token);
+            }
+
         } else {
-            // printf("Not a proper request\n");
+            // handleInitialErrors(status);
         }
-        // printf("%lu\n", strlen(status));
         // Switch cases for different inital status and write responses as required
         // ifs for type_of_request_by_client and handle the requests sent to modify status
         // based on status received, send responses or shut down server by setting terminateServer = true
@@ -333,7 +359,7 @@ int main(int argc, char *argv[]) {
         /* close connections and exit */
         printf("Closing connections\n");
         close(sd2);
-        if (terminateServer)
+        if (TERMINATE_SERVER)
             break;
     }
     close(sd);
