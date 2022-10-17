@@ -21,7 +21,7 @@
 #define MANDATORY_ERR "Mandatory args missing!\n"
 #define PORT_CHOSEN_ERR "Use a port number between 1025 and 65535\n"
 #define CARRIAGE "\r\n"
-#define IO_ERR "Unable to create a file descriptor to read socket\n"
+#define IO_ERR "Unable to create a file descriptor to read socket while trying to write data to socket\n"
 #define STATUS_400 "HTTP/1.1 400 Malformed Request\r\n\r\n"
 #define STATUS_501 "HTTP/1.1 501 Protocol Not Implemented\r\n\r\n"
 #define STATUS_405 "HTTP/1.1 405 Unsupported Method\r\n\r\n"
@@ -293,40 +293,51 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
             *req_type = figureOutTypeOfRequest(buffer);
             grabArgumentFromRequest(buffer, argument);
         }
+        if (strcmp(buffer, CARRIAGE) == 0)
+            break;
     }
     // printf("\nPrinting buffer outside reading loop: %s", buffer);
     // printf("\n");
     // Ensures that Client's request ends with CARRIAGE
-    if (strcmp(buffer, CARRIAGE) != 0) {
-        strcpy(status, STATUS_400);
-    }
+    // if (strcmp(buffer, CARRIAGE) != 0) {
+    //     strcpy(status, STATUS_400);
+    // }
+    printf("Returning out of accept_a_connection_and_read_request\n");
     return sd2;
 }
 
+/* Sends header i.e. the status of the request to the client */
 void write_header_to_connection(int conn_fd, char *reply) {
     /* write message to the connection */
     if (write(conn_fd, reply, strlen(reply)) < 0)
         errexit("error writing header to conn: %s", reply);
 }
 
-/* Writes data to the output_filename */
-// void write_file_to_connection(char *argument, char *root_dir, int conn_fd) {
-//     FILE *stream = fopen(output_filename, "w+");
-//     if (stream == NULL) {
-//         printf(IO_ERR);
-//         exit(ERROR);
-//     }
-//     int N = 0;
-//     // char *buffer = malloc(BUFFER_SIZE);
-//     char buffer[BUFFER_SIZE];
-//     memset(buffer, 0x0, BUFFER_SIZE);
-//     while (!feof(fp)) {
-//         N = fread(buffer, 1, BUFFER_SIZE * sizeof(char), fp);
-//         fwrite(buffer, sizeof(buffer[0]), N * sizeof(buffer[0]), stream);
-//         memset(buffer, 0x0, BUFFER_SIZE);
-//     }
-//     fclose(stream);
-// }
+/* Sends data to the connection */
+void write_file_to_connection(char *argument, char *root_dir, int conn_fd) {
+    char temp[BUFFER_SIZE * 2];  // will hold the file path
+    memset(temp, 0x0, BUFFER_SIZE * 2);
+    strcat(temp, root_dir);
+    strcat(temp, argument);
+    FILE *stream = fopen(temp, "rb");
+    if (stream == NULL) {
+        printf(IO_ERR);
+        exit(ERROR);
+    }
+    int N = 0;
+
+    char reader[BUFFER_SIZE];
+    memset(reader, 0x0, BUFFER_SIZE);
+    while (!feof(stream)) {
+        N = fread(&reader, sizeof(char), BUFFER_SIZE - 1, stream);
+        if (N < 0)
+            errexit("error reading file from %s", temp);
+        if (write(conn_fd, reader, N) < 0)
+            errexit("error writing data from file from %s to conn", temp);
+        memset(reader, 0x0, BUFFER_SIZE);
+    }
+    fclose(stream);
+}
 
 int main(int argc, char *argv[]) {
     bool PORT_GIVEN = false;
@@ -417,7 +428,7 @@ int main(int argc, char *argv[]) {
         write_header_to_connection(sd2, status);
 
         if (sendFile) {
-            // write_file_to_conn
+            write_file_to_connection(argument, root_dir, sd2);
         }
         /* close connections and exit */
         printf("In while loop -> Closing connection...\n");
