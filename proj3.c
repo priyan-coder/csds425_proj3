@@ -22,14 +22,14 @@
 #define PORT_CHOSEN_ERR "Use a port number between 1025 and 65535\n"
 #define CARRIAGE "\r\n"
 #define IO_ERR "Unable to create a file descriptor to read socket\n"
-#define STATUS_400 "Malformed Request"
-#define STATUS_501 "Protocol Not Implemented"
-#define STATUS_405 "Unsupported Method"
-#define STATUS_200_TERMINATE "Server Shutting Down"  // Terminate Requests
-#define STATUS_403 "Operation Forbidden"             // Terminate Requests
-#define STATUS_406 "Invalid Filename"                // GET Request
-#define STATUS_200_GET "OK"                          // GET Request
-#define STATUS_404 "File Not Found"                  // GET Request
+#define STATUS_400 "HTTP/1.1 400 Malformed Request\r\n\r\n"
+#define STATUS_501 "HTTP/1.1 501 Protocol Not Implemented\r\n\r\n"
+#define STATUS_405 "HTTP/1.1 405 Unsupported Method\r\n\r\n"
+#define STATUS_200_TERMINATE "HTTP/1.1 200 Server Shutting Down\r\n\r\n"  // Terminate Requests
+#define STATUS_403 "HTTP/1.1 403 Operation Forbidden\r\n\r\n"             // Terminate Requests
+#define STATUS_406 "HTTP/1.1 406 Invalid Filename\r\n\r\n"                // GET Request
+#define STATUS_200_GET "HTTP/1.1 200 OK\r\n\r\n"                          // GET Request
+#define STATUS_404 "HTTP/1.1 404 File Not Found\r\n\r\n"                  // GET Request
 
 int usage(char *progname) {
     fprintf(stderr, "usage: %s -p PORT -r DOCUMENT_DIRECTORY -t AUTH_TOKEN\n", progname);
@@ -303,11 +303,30 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
     return sd2;
 }
 
-void write_to_connection(int conn_fd, char *reply) {
+void write_header_to_connection(int conn_fd, char *reply) {
     /* write message to the connection */
     if (write(conn_fd, reply, strlen(reply)) < 0)
-        errexit("error writing message: %s", reply);
+        errexit("error writing header to conn: %s", reply);
 }
+
+/* Writes data to the output_filename */
+// void write_file_to_connection(char *argument, char *root_dir, int conn_fd) {
+//     FILE *stream = fopen(output_filename, "w+");
+//     if (stream == NULL) {
+//         printf(IO_ERR);
+//         exit(ERROR);
+//     }
+//     int N = 0;
+//     // char *buffer = malloc(BUFFER_SIZE);
+//     char buffer[BUFFER_SIZE];
+//     memset(buffer, 0x0, BUFFER_SIZE);
+//     while (!feof(fp)) {
+//         N = fread(buffer, 1, BUFFER_SIZE * sizeof(char), fp);
+//         fwrite(buffer, sizeof(buffer[0]), N * sizeof(buffer[0]), stream);
+//         memset(buffer, 0x0, BUFFER_SIZE);
+//     }
+//     fclose(stream);
+// }
 
 int main(int argc, char *argv[]) {
     bool PORT_GIVEN = false;
@@ -377,6 +396,7 @@ int main(int argc, char *argv[]) {
     while (1) {
         memset(status, 0x0, MAX_STATUS_LENGTH);
         memset(argument, 0x0, BUFFER_SIZE);
+        bool sendFile = false;
         int sd2 = accept_a_connection_and_read_request(sd, status, &type_of_request_by_client, argument);  // accept_a_connection_and_read_request
         printf("In while loop -> Argument in request: %s\n", argument);
         if ((strcmp(status, STATUS_400) != 0) && (strcmp(status, STATUS_501) != 0) && (strcmp(status, STATUS_405) != 0)) {
@@ -385,27 +405,22 @@ int main(int argc, char *argv[]) {
                 printf("In while loop -> GET request detected\n");
                 if (isGetRequestValid(argument, root_dir, status)) {
                     printf("In while loop -> GET request is VALID\n");
-                    // sendHeader
-                    // sendFile
-                } else {
-                    printf("In while loop -> GET request invalid\n");
-                    // sendHeader
+                    sendFile = true;
                 }
-
             } else {
                 printf("In while loop -> TERMINATE request detected\n");
                 TERMINATE_SERVER = isServerShuttingDown(argument, auth_token, status);
-                // sendHeader
             }
-        } else {
-            // initial errors, 400, 501, 405
-            // sendHeader
         }
-
         if (strlen(status) > 0)
             printf("In while loop -> status: %s\n", status);
+        write_header_to_connection(sd2, status);
+
+        if (sendFile) {
+            // write_file_to_conn
+        }
         /* close connections and exit */
-        printf("In while loop -> Closing connections...\n");
+        printf("In while loop -> Closing connection...\n");
         close(sd2);
         if (TERMINATE_SERVER)
             break;
