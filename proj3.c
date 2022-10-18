@@ -293,7 +293,7 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
 /* Sends header of server response to client i.e status */
 void write_header_to_connection(int conn_fd, char *reply) {
     if (write(conn_fd, reply, strlen(reply)) < 0)
-        errexit("error writing header to conn: %s", reply);
+        printf("error writing header to conn: %s", reply);
 }
 
 /* Sends data read from requested file over the connection socket to the client */
@@ -305,7 +305,7 @@ void write_file_to_connection(char *argument, char *root_dir, int conn_fd) {
     FILE *stream = fopen(temp, "rb");
     if (stream == NULL) {
         printf(IO_ERR);
-        exit(ERROR);
+        // exit(ERROR);
     }
     int N = 0;
     char reader[BUFFER_SIZE];
@@ -313,9 +313,9 @@ void write_file_to_connection(char *argument, char *root_dir, int conn_fd) {
     while (!feof(stream)) {
         N = fread(&reader, sizeof(char), BUFFER_SIZE - 1, stream);
         if (N < 0)
-            errexit("error reading file from %s", temp);
+            printf("error reading file from %s", temp);
         if (write(conn_fd, reader, N) < 0)
-            errexit("error writing data from file from %s to conn", temp);
+            printf("error writing data from file from %s to conn", temp);
         memset(reader, 0x0, BUFFER_SIZE);
     }
     fclose(stream);
