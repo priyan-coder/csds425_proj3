@@ -305,6 +305,7 @@ void write_file_to_connection(char *argument, char *root_dir, int conn_fd) {
     FILE *stream = fopen(temp, "rb");
     if (stream == NULL) {
         printf(IO_ERR);
+        return;
         // exit(ERROR);
     }
     int N = 0;
@@ -312,10 +313,14 @@ void write_file_to_connection(char *argument, char *root_dir, int conn_fd) {
     memset(reader, 0x0, BUFFER_SIZE);
     while (!feof(stream)) {
         N = fread(&reader, sizeof(char), BUFFER_SIZE - 1, stream);
-        if (N < 0)
+        if (N < 0) {
             printf("error reading file from %s", temp);
-        if (write(conn_fd, reader, N) < 0)
+            return;
+        }
+        if (write(conn_fd, reader, N) < 0) {
             printf("error writing data from file from %s to conn", temp);
+            return;
+        }
         memset(reader, 0x0, BUFFER_SIZE);
     }
     fclose(stream);
