@@ -1,3 +1,10 @@
+/* Name: BALASHANMUGA PRIYAN RAJAMOHAN
+ * Case ID: bxr261
+ * Filename: proj3.c
+ * Date created: 17 Oct 2022
+ * Description: The following code is used to set up a minimal web server that handles GET and TERMINATE requests.
+ */
+
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -11,7 +18,6 @@
 #include "stdbool.h"
 
 #define REQUIRED_ARGC 7
-#define MSG_POS 2
 #define ERROR 1
 #define SUCCESS 0
 #define QLEN 1
@@ -31,11 +37,13 @@
 #define STATUS_200_GET "HTTP/1.1 200 OK\r\n\r\n"                          // GET Request
 #define STATUS_404 "HTTP/1.1 404 File Not Found\r\n\r\n"                  // GET Request
 
+/* Prints usage information and exits the program */
 int usage(char *progname) {
     fprintf(stderr, "usage: %s -p PORT -r DOCUMENT_DIRECTORY -t AUTH_TOKEN\n", progname);
     exit(ERROR);
 }
 
+/* Prints an error message and exits the program */
 int errexit(char *format, char *arg) {
     fprintf(stderr, format, arg);
     fprintf(stderr, "\n");
@@ -59,10 +67,8 @@ void grabArgumentFromRequest(char *request, char *argument) {
     strncpy(argument, token, strlen(token));
 }
 
-/* Returns 1 for GET request, 2 for TERMINATE request, -1 for Neither case */
+/* Parses the first line of client's request header and returns 1 for GET request, 2 for TERMINATE request, -1 for neither case */
 int figureOutTypeOfRequest(char *request) {
-    //  -1 : Neither GET or Terminate, 1 : GET, 2: Terminate
-    // Modify the value of req_type
     char copy_req[strlen(request) + 1];
     memset(copy_req, 0x0, strlen(request) + 1);
     memcpy(copy_req, request, strlen(request));
@@ -76,9 +82,9 @@ int figureOutTypeOfRequest(char *request) {
     }
 }
 
-/* Checks for 3 tokens in the first line of the client's request header. Returns true if 3 tokens were found */
+/* Checks for 3 tokens in the first line of client's request header. Returns true if 3 tokens were found */
 bool isRequestStartingWithCorrectSyntax(char *request) {
-    // status 400 check: tokenize and check for 3 items
+    // status 400 check
     char copy_req[strlen(request) + 1];
     int count = 0;
     memset(copy_req, 0x0, strlen(request) + 1);
@@ -86,7 +92,6 @@ bool isRequestStartingWithCorrectSyntax(char *request) {
     char *token;
     token = strtok(copy_req, " ");
     while (token != NULL) {
-        // printf("tokenising in isRequestStartingWithCorrectSyntax: %s\n", token);
         count += 1;
         token = strtok(NULL, " ");
     }
@@ -97,10 +102,10 @@ bool isRequestStartingWithCorrectSyntax(char *request) {
     }
 }
 
-/* Checks for the right protocol in the first line of the client's request header */
+/* Checks for the use of right protocol in the first line of client's request header and returns true if correct */
 bool isRequestContainingTheCorrectProtocol(char *request) {
-    // status 501 check: see if header has "HTTP/" (case-sensitive)
-    // tokenize for "/" and check if it is just HTTP and not ALHTTP
+    // status 501 check
+    // check if it is just HTTP and not ALHTTP for example
     char copy_req[strlen(request) + 1];
     memset(copy_req, 0x0, strlen(request) + 1);
     memcpy(copy_req, request, strlen(request));
@@ -112,9 +117,7 @@ bool isRequestContainingTheCorrectProtocol(char *request) {
         token = strtok(NULL, " ");
         i++;
     }
-    // printf("token in isRequestContainingTheCorrectProtocol : %s\n", token);
     char *app_protocol = strtok(token, "/");
-    // printf("app_protocol in isRequestContainingTheCorrectProtocol : %s\n", app_protocol);
     if (strcmp(app_protocol, "HTTP") == 0) {
         return true;
     } else {
@@ -122,9 +125,9 @@ bool isRequestContainingTheCorrectProtocol(char *request) {
     }
 }
 
+/* Method used can only be GET or TERMINATE. Function parses the first line of client's request header and returns true if either of the two requests were made */
 bool isRequestContainingTheCorrectMethod(char *request) {
-    // status 405 check: METHOD of request can only be "GET" or "TERMINATE"
-    // look for GET or TERMINATE in request
+    // status 405 check
     char copy_req[strlen(request) + 1];
     memset(copy_req, 0x0, strlen(request) + 1);
     memcpy(copy_req, request, strlen(request));
@@ -136,7 +139,7 @@ bool isRequestContainingTheCorrectMethod(char *request) {
     }
 }
 
-/* Checks if each line of the client's request header terminates with a carriage */
+/* Checks client's request header to see if it terminates with a carriage. Returns true if well terminated */
 bool isEachLineWellTerminated(char *request) {
     // status 400 check
     if (strstr(request, CARRIAGE) != NULL) {
@@ -146,10 +149,9 @@ bool isEachLineWellTerminated(char *request) {
     }
 }
 
-/* Compares actual_cmd_line_token against request argument and returns true if server should shut down */
+/* Compares actual_cmd_line_token against request argument and returns a boolean indicating whether server should shut down */
 bool isServerShuttingDown(char *request_token, char *actual_cmd_line_token, char *status) {
-    // Check for case-sensitive match
-    // Two possible outcomes - either 200 AND terminate server or 403 and continue accepting new connections
+    // Two possible outcomes - either 200(server terminates) or 403(continue accepting new connections)
     memset(status, 0x0, MAX_STATUS_LENGTH);
     if (strcmp(actual_cmd_line_token, request_token) == 0) {
         strcpy(status, STATUS_200_TERMINATE);
@@ -160,11 +162,10 @@ bool isServerShuttingDown(char *request_token, char *actual_cmd_line_token, char
     }
 }
 
-/* For a GET request, the argument specified in the header has to begin with a "/" */
+/* For a GET request, the argument specified in the header has to begin with a "/". Function returns a boolean indicating if this requirement is met */
 bool doesFileNameBeginCorrectly(char *argument_filename) {
-    // status 406 check: see if first character of argument is a "/", else return 406
+    // status 406 check
     if (argument_filename[0] == '/') {
-        printf("argumentFileName's first char in doesFileNameBeginCorrectly: %c\n", argument_filename[0]);
         return true;
     } else {
         return false;
@@ -173,11 +174,9 @@ bool doesFileNameBeginCorrectly(char *argument_filename) {
 
 /* For a GET request, if the argument specified in the header is nothing but a "/", we have to convert it into "/homepage.html" */
 void convertFileNameIfJustASlash(char *argument_filename) {
-    // convert "/" into "/homepage.html"
     if (strcmp(argument_filename, "/") == 0) {
         memset(argument_filename, 0x0, BUFFER_SIZE);
         strcpy(argument_filename, "/homepage.html");
-        printf("Converting fileName in convertFileNameIfJustASlash and new argument is: %s\n", argument_filename);
     }
 }
 
@@ -188,7 +187,6 @@ bool doesFileExist(char *argument_filename, char *root_dir) {
     memset(temp, 0x0, BUFFER_SIZE * 2);
     strcat(temp, root_dir);
     strcat(temp, argument_filename);
-    printf("filepath in doesFileExist: %s\n", temp);
     FILE *fp = fopen(temp, "r");
     if (fp != NULL) {
         is_exist = true;
@@ -197,11 +195,8 @@ bool doesFileExist(char *argument_filename, char *root_dir) {
     return is_exist;
 }
 
-/* Checks for status codes 406, 404 or 200 and updates status accordingly. Converts argument into /homepage.html if it was just a "/" */
+/* Checks for status codes 406, 404 & 200 and updates status accordingly. Calls another function to convert argument into /homepage.html if it was just a "/" */
 bool isGetRequestValid(char *argument_filename, char *root_dir, char *status) {
-    // fileName has to be concatenated with root directory(specified via cmd line after -r)
-    // if fileFound -> 200 ok, send header with content
-    // else -> 404
     memset(status, 0x0, MAX_STATUS_LENGTH);
     convertFileNameIfJustASlash(argument_filename);
     if (!doesFileNameBeginCorrectly(argument_filename)) {
@@ -216,6 +211,7 @@ bool isGetRequestValid(char *argument_filename, char *root_dir, char *status) {
     return true;
 }
 
+/* Creates a socket and returns the socket. Socket is set up to listen for incoming requests */
 int create_socket_and_listen(char *port_number) {
     struct sockaddr_in sin;
     struct protoent *protoinfo;
@@ -245,11 +241,10 @@ int create_socket_and_listen(char *port_number) {
         errexit("cannot listen on port %s\n", port_number);
 
     // printf("Server Address: %s\nSocket Created and is listening on port %d\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
-
     return sd;
 }
 
-/* Accept a connection. Buffer data sent by client. Check if client's request is well formed and identify the type of request */
+/* Function accepts a connection and checks if client's request is well formed. Also identifies the type of request and returns the connection socket */
 int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_type, char *argument) {
     memset(status, 0x0, MAX_STATUS_LENGTH);
     char buffer[BUFFER_SIZE];
@@ -269,9 +264,7 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
         printf(IO_ERR);
         exit(ERROR);
     }
-    printf("Reading Request...\n");
     while (fgets(buffer, BUFFER_SIZE, fp) != NULL) {
-        printf("REQ: %s", buffer);
         if (!isEachLineWellTerminated(buffer)) {
             strcpy(status, STATUS_400);
             break;
@@ -283,11 +276,9 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
             }
             if (!isRequestContainingTheCorrectProtocol(buffer)) {
                 strcpy(status, STATUS_501);
-                // break;
             }
             if (!isRequestContainingTheCorrectMethod(buffer)) {
                 strcpy(status, STATUS_405);
-                // break;
             }
             isFirstLineChecksDone = true;
             *req_type = figureOutTypeOfRequest(buffer);
@@ -296,24 +287,16 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
         if (strcmp(buffer, CARRIAGE) == 0)
             break;
     }
-    // printf("\nPrinting buffer outside reading loop: %s", buffer);
-    // printf("\n");
-    // Ensures that Client's request ends with CARRIAGE
-    // if (strcmp(buffer, CARRIAGE) != 0) {
-    //     strcpy(status, STATUS_400);
-    // }
-    printf("Returning out of accept_a_connection_and_read_request\n");
     return sd2;
 }
 
-/* Sends header i.e. the status of the request to the client */
+/* Sends header of server response to client i.e status */
 void write_header_to_connection(int conn_fd, char *reply) {
-    /* write message to the connection */
     if (write(conn_fd, reply, strlen(reply)) < 0)
         errexit("error writing header to conn: %s", reply);
 }
 
-/* Sends data to the connection */
+/* Sends data read from requested file over the connection socket to the client */
 void write_file_to_connection(char *argument, char *root_dir, int conn_fd) {
     char temp[BUFFER_SIZE * 2];  // will hold the file path
     memset(temp, 0x0, BUFFER_SIZE * 2);
@@ -325,7 +308,6 @@ void write_file_to_connection(char *argument, char *root_dir, int conn_fd) {
         exit(ERROR);
     }
     int N = 0;
-
     char reader[BUFFER_SIZE];
     memset(reader, 0x0, BUFFER_SIZE);
     while (!feof(stream)) {
@@ -345,12 +327,12 @@ int main(int argc, char *argv[]) {
     bool AUTH_TOKEN_GIVEN = false;
     bool TERMINATE_SERVER = false;
     int opt, sd;
-    int type_of_request_by_client = -1;  //  -1 : Neither GET or Terminate, 1 : GET, 2: Terminate
+    int type_of_request_by_client = -1;  //  -1 : Neither GET or Terminate, 1: GET, 2: Terminate
     char *port_number = NULL;            // server listens on this port number
-    char *root_dir = NULL;
-    char *auth_token = NULL;         // auth_token from cmd line to terminate server
-    char status[MAX_STATUS_LENGTH];  // status based on client request
-    char argument[BUFFER_SIZE];      // the kind of file needed or could be a auth_token from request header
+    char *root_dir = NULL;               // argument of -r in cmd line
+    char *auth_token = NULL;             // argument of -t in cmd line i.e. auth_token from cmd line to terminate server
+    char status[MAX_STATUS_LENGTH];      // status based on client request
+    char argument[BUFFER_SIZE];          // the kind of file needed or could be a auth_token from request header
 
     /* There should be be 7 elements in argv, without which we terminate the program execution. */
     if (argc != REQUIRED_ARGC) {
@@ -399,44 +381,31 @@ int main(int argc, char *argv[]) {
         usage(argv[0]);
     }
 
-    printf("In main loop -> PORT : %s\n", port_number);
-    printf("In main loop -> ROOT_DIR : %s\n", root_dir);
-    printf("In main loop -> AUTH_TOKEN : %s\n", auth_token);
-
     sd = create_socket_and_listen(port_number);
     while (1) {
         memset(status, 0x0, MAX_STATUS_LENGTH);
         memset(argument, 0x0, BUFFER_SIZE);
         bool sendFile = false;
-        int sd2 = accept_a_connection_and_read_request(sd, status, &type_of_request_by_client, argument);  // accept_a_connection_and_read_request
-        printf("In while loop -> Argument in request: %s\n", argument);
+        int sd2 = accept_a_connection_and_read_request(sd, status, &type_of_request_by_client, argument);
         if ((strcmp(status, STATUS_400) != 0) && (strcmp(status, STATUS_501) != 0) && (strcmp(status, STATUS_405) != 0)) {
             // handle get or terminate request
             if (type_of_request_by_client == 1) {
-                printf("In while loop -> GET request detected\n");
                 if (isGetRequestValid(argument, root_dir, status)) {
-                    printf("In while loop -> GET request is VALID\n");
                     sendFile = true;
                 }
             } else {
-                printf("In while loop -> TERMINATE request detected\n");
                 TERMINATE_SERVER = isServerShuttingDown(argument, auth_token, status);
             }
         }
-        if (strlen(status) > 0)
-            printf("In while loop -> status: %s\n", status);
         write_header_to_connection(sd2, status);
-
         if (sendFile) {
             write_file_to_connection(argument, root_dir, sd2);
         }
         /* close connections and exit */
-        printf("In while loop -> Closing connection...\n");
         close(sd2);
         if (TERMINATE_SERVER)
             break;
     }
-    printf("In main loop -> Terminating Server...\n");
     close(sd);
     exit(SUCCESS);
 }
