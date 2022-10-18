@@ -13,5 +13,6 @@ clean:
 	rm -f *.jpg
 	rm -f *.dat
 	rm -f *.out
+	rm -f *.txt
 
 distclean: clean
