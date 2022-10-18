@@ -1,8 +1,8 @@
 /* Name: BALASHANMUGA PRIYAN RAJAMOHAN
  * Case ID: bxr261
  * Filename: proj3.c
- * Date created: 17 Oct 2022
- * Description: The following code is used to set up a minimal web server that handles GET and TERMINATE requests.
+ * Date created: 18 Oct 2022
+ * Description: The following code is used to set up a minimal web server that handles GET and TERMINATE requests. Assumes argument size of 512 chars.
  */
 
 #include <arpa/inet.h>
@@ -266,18 +266,22 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
     }
     while (fgets(buffer, BUFFER_SIZE, fp) != NULL) {
         if (!isEachLineWellTerminated(buffer)) {
+            memset(status, 0x0, MAX_STATUS_LENGTH);
             strcpy(status, STATUS_400);
             break;
         }
         if (!isFirstLineChecksDone) {
             if (!isRequestStartingWithCorrectSyntax(buffer)) {
+                memset(status, 0x0, MAX_STATUS_LENGTH);
                 strcpy(status, STATUS_400);
                 break;
             }
-            if (!isRequestContainingTheCorrectProtocol(buffer)) {
+            if (isRequestStartingWithCorrectSyntax(buffer) && !isRequestContainingTheCorrectProtocol(buffer)) {
+                memset(status, 0x0, MAX_STATUS_LENGTH);
                 strcpy(status, STATUS_501);
             }
-            if (!isRequestContainingTheCorrectMethod(buffer)) {
+            if (isRequestStartingWithCorrectSyntax(buffer) && isRequestContainingTheCorrectProtocol(buffer) && !isRequestContainingTheCorrectMethod(buffer)) {
+                memset(status, 0x0, MAX_STATUS_LENGTH);
                 strcpy(status, STATUS_405);
             }
             isFirstLineChecksDone = true;
@@ -286,6 +290,11 @@ int accept_a_connection_and_read_request(int listen_fd, char *status, int *req_t
         }
         if (strcmp(buffer, CARRIAGE) == 0)
             break;
+    }
+    // Handles a case where req is : "GET /small-test.dat HTTP/1.1\r\n"
+    if (strcmp(buffer, CARRIAGE) != 0) {
+        memset(status, 0x0, MAX_STATUS_LENGTH);
+        strcpy(status, STATUS_400);
     }
     return sd2;
 }
@@ -318,7 +327,7 @@ void write_file_to_connection(char *argument, char *root_dir, int conn_fd) {
             return;
         }
         if (write(conn_fd, reader, N) < 0) {
-            printf("error writing data from file from %s to conn", temp);
+            printf("error writing data from file at %s to conn", temp);
             return;
         }
         memset(reader, 0x0, BUFFER_SIZE);
